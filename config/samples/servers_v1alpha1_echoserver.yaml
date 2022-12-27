@@ -9,4 +9,4 @@ metadata:
     app.kubernetes.io/created-by: echo-server
   name: echoserver-sample
 spec:
-  # TODO(user): Add fields here
+  replicas: 5

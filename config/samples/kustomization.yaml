@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- servers_v1alpha1_echoserver.yaml
-#+kubebuilder:scaffold:manifestskustomizesamples

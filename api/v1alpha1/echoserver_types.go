@@ -25,11 +25,8 @@ import (
 
 // EchoServerSpec defines the desired state of EchoServer
 type EchoServerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of EchoServer. Edit echoserver_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// The number of replicas for the echo-server deployment
+	Replicas *int32 `json:"replicas"`
 }
 
 // EchoServerStatus defines the observed state of EchoServer
@@ -40,6 +37,9 @@ type EchoServerStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Replicas",type=integer,JSONPath=`.spec.replicas`
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+//+kubebuilder:resource:shortName=es
 
 // EchoServer is the Schema for the echoservers API
 type EchoServer struct {
