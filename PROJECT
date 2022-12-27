@@ -1,0 +1,6 @@
+domain: pwhitehead00.io
+layout:
+- go.kubebuilder.io/v4-alpha
+projectName: echo-server
+repo: pwhitehead00.io/echo-server
+version: "3"
