@@ -3,4 +3,14 @@ layout:
 - go.kubebuilder.io/v4-alpha
 projectName: echo-server
 repo: pwhitehead00.io/echo-server
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: pwhitehead00.io
+  group: servers
+  kind: EchoServer
+  path: pwhitehead00.io/echo-server/api/v1alpha1
+  version: v1alpha1
 version: "3"
