@@ -19,8 +19,10 @@ package controllers
 import (
 	"context"
 	"reflect"
+	"strconv"
 	"time"
 
+	hashstructure "github.com/mitchellh/hashstructure/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -110,6 +112,8 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	hash, _ := hashstructure.Hash(configMap, hashstructure.FormatV2, nil)
+
 	constructDeploy := func(echoServer *serversv1alpha1.EchoServer) (*appsv1.Deployment, error) {
 		deploy := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -126,7 +130,8 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							"app": "caddy",
+							"app":  "caddy",
+							"hash": strconv.FormatUint(hash, 10),
 						},
 					},
 					Spec: v1.PodSpec{
@@ -194,13 +199,24 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			log.V(1).Info("Failed to create Deployment", "error", err)
 		}
 	} else if err == nil {
+		// reconcile deployment replicas
 		if *foundDeployment.Spec.Replicas != *echoServer.Spec.Replicas {
 			log.V(1).Info("Replicas out of sync", "found:", foundDeployment.Spec.Replicas, "expected:", echoServer.Spec.Replicas)
 			foundDeployment.Spec.Replicas = echoServer.Spec.Replicas
-			log.V(1).Info("Updating Deployment", "deployment", echoServer.Name)
 			err := r.Update(ctx, foundDeployment)
 			if err != nil {
 				log.V(1).Error(err, "Failed to update deployment", "deployment", echoServer.Name)
+				return ctrl.Result{}, err
+			}
+		}
+
+		// reconcile deployment labels.  this will force pods to roll if the configmap changes
+		if !reflect.DeepEqual(foundDeployment.Spec.Template.ObjectMeta.Labels, deploy.Spec.Template.ObjectMeta.Labels) {
+			log.V(1).Info("Pod template out of sync", "found:", foundDeployment.Spec.Template.ObjectMeta.Labels, "expected:", deploy.Spec.Template.ObjectMeta.Labels)
+			foundDeployment.Spec.Template.ObjectMeta.Labels = deploy.Spec.Template.ObjectMeta.Labels
+			err := r.Update(ctx, foundDeployment)
+			if err != nil {
+				log.V(1).Error(err, "Failed to reconcile labels", "deployment", echoServer.Name)
 				return ctrl.Result{}, err
 			}
 		}
@@ -221,11 +237,15 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 	} else if err == nil {
-		if foundService.Spec.Ports[0] != service.Spec.Ports[0] {
-			log.V(1).Info("Service out of sync", "found:", foundService.Spec.Ports[0], "expected:", service.Spec.Ports[0])
+		// reconcile service ports
+		if !reflect.DeepEqual(foundService.Spec.Ports, service.Spec.Ports) {
+			log.V(1).Info("Service ports out of sync", "found:", foundService.Spec.Ports, "expected:", service.Spec.Ports)
 			foundService.Spec.Ports[0] = service.Spec.Ports[0]
-			log.V(1).Info("Updating Service", "service", echoServer.Name)
-			r.Update(ctx, foundService)
+			err := r.Update(ctx, foundService)
+			if err != nil {
+				log.V(1).Error(err, "Failed to reconcie service ports", "name", echoServer.Name, "namespace", echoServer.Namespace)
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -238,6 +258,8 @@ func (r *EchoServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&serversv1alpha1.EchoServer{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&v1.Service{}).
+		Owns(&v1.ConfigMap{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
@@ -276,21 +298,6 @@ func (r *EchoServerReconciler) newConfigMap(echoServer *serversv1alpha1.EchoServ
 			Namespace: echoServer.Namespace,
 		},
 		Data: map[string]string{
-			"caddyfile": `:80 {
-				root * /Users/paulwhitehead/code/sandbox/echo-server/
-				encode gzip
-				file_server {
-					hide .git
-				}
-
-				log {
-					output file /var/log/caddy/my-static-site.log
-				}
-
-				header {
-					?Cache-Control "max-age=1800"
-				}
-			}`,
 			"index.html": echoServer.Spec.Text,
 		},
 	}

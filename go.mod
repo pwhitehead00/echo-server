@@ -3,6 +3,7 @@ module pwhitehead00.io/echo-server
 go 1.19
 
 require (
+	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/onsi/ginkgo/v2 v2.6.1
 	github.com/onsi/gomega v1.24.2
 	k8s.io/api v0.26.0
