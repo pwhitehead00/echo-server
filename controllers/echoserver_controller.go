@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -96,14 +97,18 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-	} //else if err == nil {
-	// 	if foundService.Spec.Ports[0] != service.Spec.Ports[0] {
-	// 		log.V(1).Info("Service out of sync", "found:", foundService.Spec.Ports[0], "expected:", service.Spec.Ports[0])
-	// 		foundService.Spec.Ports[0] = service.Spec.Ports[0]
-	// 		log.V(1).Info("Updating Service", "service", echoServer.Name)
-	// 		r.Update(ctx, foundService)
-	// 	}
-	// }
+	} else if err == nil {
+		if !reflect.DeepEqual(foundConfigMap.Data, configMap.Data) {
+			log.V(1).Info("configMap out of sync", "found:", foundConfigMap.Data, "expected:", configMap.Data)
+			foundConfigMap.Data = configMap.Data
+			log.V(1).Info("Updating Service", "service", echoServer.Name)
+			err := r.Update(ctx, foundConfigMap)
+			if err != nil {
+				log.V(1).Error(err, "Failed updating Service", "service", echoServer.Name)
+				return ctrl.Result{}, err
+			}
+		}
+	}
 
 	constructDeploy := func(echoServer *serversv1alpha1.EchoServer) (*appsv1.Deployment, error) {
 		deploy := &appsv1.Deployment{
@@ -135,30 +140,30 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 										Name:          "http",
 									},
 								},
-								// 		VolumeMounts: []v1.VolumeMount{
-								// 			{
-								// 				Name:      "config-volume",
-								// 				MountPath: "/usr/share/caddy",
-								// 			},
-								// 		},
-								// 	},
-								// },
-								// Volumes: []v1.Volume{
-								// 	{
-								// 		Name: "config-volume",
-								// 		VolumeSource: v1.VolumeSource{
-								// 			ConfigMap: &v1.ConfigMapVolumeSource{
-								// 				LocalObjectReference: v1.LocalObjectReference{
-								// 					Name: echoServer.Name,
-								// 				},
-								// 				Items: []v1.KeyToPath{
-								// 					{
-								// 						Key:  "index.html",
-								// 						Path: "index.html",
-								// 					},
-								// 				},
-								// 			},
-								// 		},
+								VolumeMounts: []v1.VolumeMount{
+									{
+										Name:      "config-volume",
+										MountPath: "/usr/share/caddy",
+									},
+								},
+							},
+						},
+						Volumes: []v1.Volume{
+							{
+								Name: "config-volume",
+								VolumeSource: v1.VolumeSource{
+									ConfigMap: &v1.ConfigMapVolumeSource{
+										LocalObjectReference: v1.LocalObjectReference{
+											Name: echoServer.Name,
+										},
+										Items: []v1.KeyToPath{
+											{
+												Key:  "index.html",
+												Path: "index.html",
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -193,7 +198,11 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			log.V(1).Info("Replicas out of sync", "found:", foundDeployment.Spec.Replicas, "expected:", echoServer.Spec.Replicas)
 			foundDeployment.Spec.Replicas = echoServer.Spec.Replicas
 			log.V(1).Info("Updating Deployment", "deployment", echoServer.Name)
-			r.Update(ctx, foundDeployment)
+			err := r.Update(ctx, foundDeployment)
+			if err != nil {
+				log.V(1).Error(err, "Failed to update deployment", "deployment", echoServer.Name)
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
