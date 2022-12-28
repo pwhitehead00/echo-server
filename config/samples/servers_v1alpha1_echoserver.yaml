@@ -10,3 +10,5 @@ metadata:
   name: echoserver-sample
 spec:
   replicas: 5
+  port: 8002
+  text: "hello world"

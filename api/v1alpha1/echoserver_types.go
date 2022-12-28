@@ -27,6 +27,10 @@ import (
 type EchoServerSpec struct {
 	// The number of replicas for the echo-server deployment
 	Replicas *int32 `json:"replicas"`
+	// The targetPort for the service
+	Port int32 `json:"port"`
+	// The text to serve
+	Text string `json:"text"`
 }
 
 // EchoServerStatus defines the observed state of EchoServer
@@ -38,6 +42,7 @@ type EchoServerStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Replicas",type=integer,JSONPath=`.spec.replicas`
+//+kubebuilder:printcolumn:name="Port",type=integer,JSONPath=`.spec.port`
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 //+kubebuilder:resource:shortName=es
 

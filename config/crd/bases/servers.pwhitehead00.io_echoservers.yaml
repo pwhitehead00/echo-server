@@ -21,6 +21,9 @@ spec:
     - jsonPath: .spec.replicas
       name: Replicas
       type: integer
+    - jsonPath: .spec.port
+      name: Port
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -44,12 +47,21 @@ spec:
           spec:
             description: EchoServerSpec defines the desired state of EchoServer
             properties:
+              port:
+                description: The targetPort for the service
+                format: int32
+                type: integer
               replicas:
                 description: The number of replicas for the echo-server deployment
                 format: int32
                 type: integer
+              text:
+                description: The text to serve
+                type: string
             required:
+            - port
             - replicas
+            - text
             type: object
           status:
             description: EchoServerStatus defines the observed state of EchoServer

@@ -1,5 +1,13 @@
 # echo-server
 
+## Useful Links
+
+[Brief explanation of how Reconcile() works](https://github.com/operator-framework/operator-sdk/issues/3086#issuecomment-633753732)
+
+```sh
+docker run --rm -p 80:80 -v $PWD/Caddyfile:/etc/caddy/Caddyfile -v $PWD/index.html:/usr/share/caddy/index.html caddy:2.6.2
+```
+
 // TODO(user): Add simple overview of use/purpose
 
 ## Description
