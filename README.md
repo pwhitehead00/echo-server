@@ -2,16 +2,10 @@
 
 ## Useful Links
 
-[Brief explanation of how Reconcile() works](https://github.com/operator-framework/operator-sdk/issues/3086#issuecomment-633753732)
-[KubeBuilder v1 docs](https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html)
-
-* Creating events
-[sample controller](https://github.com/kubernetes/sample-controller)
-[Resources managed by the Operator](https://github.com/kubernetes-sigs/kubebuilder/blob/master/docs/book/src/reference/watching-resources/testdata/owned-resource/controller.go)
-
-```sh
-docker run --rm -p 80:80 -v $PWD/Caddyfile:/etc/caddy/Caddyfile -v $PWD/index.html:/usr/share/caddy/index.html caddy:2.6.2
-```
+* [Brief explanation of how Reconcile() works](https://github.com/operator-framework/operator-sdk/issues/3086#issuecomment-633753732)
+* [KubeBuilder v1 docs](https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html)
+* [sample controller](https://github.com/kubernetes/sample-controller)
+* [Resources managed by the Operator](https://github.com/kubernetes-sigs/kubebuilder/blob/master/docs/book/src/reference/watching-resources/testdata/owned-resource/controller.go)
 
 ## Description
 
