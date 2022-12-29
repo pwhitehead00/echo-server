@@ -138,76 +138,7 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	constructDeploy := func(echoServer *serversv1alpha1.EchoServer) (*appsv1.Deployment, error) {
-		deploy := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      echoServer.Name,
-				Namespace: echoServer.Namespace,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: echoServer.Spec.Replicas,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": "caddy",
-					},
-				},
-				Template: v1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"app":  "caddy",
-							"hash": strconv.FormatUint(hash, 10),
-						},
-					},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{
-							{
-								Image: "caddy:2.6.2",
-								Name:  "caddy",
-								Ports: []v1.ContainerPort{
-									{
-										ContainerPort: 80,
-										Name:          "http",
-									},
-								},
-								VolumeMounts: []v1.VolumeMount{
-									{
-										Name:      "config-volume",
-										MountPath: "/usr/share/caddy",
-									},
-								},
-							},
-						},
-						Volumes: []v1.Volume{
-							{
-								Name: "config-volume",
-								VolumeSource: v1.VolumeSource{
-									ConfigMap: &v1.ConfigMapVolumeSource{
-										LocalObjectReference: v1.LocalObjectReference{
-											Name: echoServer.Name,
-										},
-										Items: []v1.KeyToPath{
-											{
-												Key:  "index.html",
-												Path: "index.html",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		if err := ctrl.SetControllerReference(echoServer, deploy, r.Scheme); err != nil {
-			return nil, err
-		}
-
-		return deploy, nil
-	}
-
-	deploy, err := constructDeploy(&echoServer)
+	deploy, err := r.newDeployment(&echoServer, hash)
 	if err != nil {
 		log.Error(err, "unable to construct deployment")
 		// don't bother requeuing until we get a change to the spec
@@ -331,4 +262,74 @@ func (r *EchoServerReconciler) newConfigMap(echoServer *serversv1alpha1.EchoServ
 	}
 
 	return configMap, nil
+}
+
+func (r *EchoServerReconciler) newDeployment(echoServer *serversv1alpha1.EchoServer, hash uint64) (*appsv1.Deployment, error) {
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      echoServer.Name,
+			Namespace: echoServer.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: echoServer.Spec.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "caddy",
+				},
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":  "caddy",
+						"hash": strconv.FormatUint(hash, 10),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Image: "caddy:2.6.2",
+							Name:  "caddy",
+							Ports: []v1.ContainerPort{
+								{
+									ContainerPort: 80,
+									Name:          "http",
+								},
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "config-volume",
+									MountPath: "/usr/share/caddy",
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "config-volume",
+							VolumeSource: v1.VolumeSource{
+								ConfigMap: &v1.ConfigMapVolumeSource{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: echoServer.Name,
+									},
+									Items: []v1.KeyToPath{
+										{
+											Key:  "index.html",
+											Path: "index.html",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := ctrl.SetControllerReference(echoServer, deployment, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	return deployment, nil
 }
