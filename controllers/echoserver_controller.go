@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strconv"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -41,8 +43,15 @@ import (
 // EchoServerReconciler reconciles a EchoServer object
 type EchoServerReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
+
+// ConfigMap event reason list
+const (
+	ReconcileConfigMapData       = "ReconcileConfigMapData"
+	FailedReconcileConfigMapData = "FailedReconcileConfigMapData"
+)
 
 //+kubebuilder:rbac:groups=servers.pwhitehead00.io,resources=echoservers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=servers.pwhitehead00.io,resources=echoservers/status,verbs=get;update;patch
@@ -99,16 +108,19 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		r.Recorder.Event(&echoServer, v1.EventTypeNormal, "Created", fmt.Sprintf("Created configMap %s/%s", configMap.Namespace, configMap.Name))
 	} else if err == nil {
+		// reconcile configMap.Data
 		if !reflect.DeepEqual(foundConfigMap.Data, configMap.Data) {
 			log.V(1).Info("configMap out of sync", "found:", foundConfigMap.Data, "expected:", configMap.Data)
 			foundConfigMap.Data = configMap.Data
-			log.V(1).Info("Updating Service", "service", echoServer.Name)
 			err := r.Update(ctx, foundConfigMap)
 			if err != nil {
-				log.V(1).Error(err, "Failed updating Service", "service", echoServer.Name)
+				log.V(1).Error(err, "Failed updating ConfigMap", "configmap", echoServer.Name)
+				r.Recorder.Event(&echoServer, v1.EventTypeWarning, "FailedReconcileConfigMapData", fmt.Sprintf("Failed to reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
 				return ctrl.Result{}, err
 			}
+			r.Recorder.Event(&echoServer, v1.EventTypeNormal, ReconcileConfigMapData, fmt.Sprintf("Reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
 		}
 	}
 
