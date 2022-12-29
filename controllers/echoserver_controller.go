@@ -47,10 +47,16 @@ type EchoServerReconciler struct {
 	Recorder record.EventRecorder
 }
 
+// Common event reasons
+const (
+	Created string = "Created"
+	Failed  string = "Failed"
+)
+
 // ConfigMap event reason list
 const (
-	ReconcileConfigMapData       = "ReconcileConfigMapData"
-	FailedReconcileConfigMapData = "FailedReconcileConfigMapData"
+	ReconcileConfigMapData       string = "ReconcileConfigMapData"
+	FailedReconcileConfigMapData string = "FailedReconcileConfigMapData"
 )
 
 //+kubebuilder:rbac:groups=servers.pwhitehead00.io,resources=echoservers,verbs=get;list;watch;create;update;patch;delete
@@ -120,11 +126,17 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				r.Recorder.Event(&echoServer, v1.EventTypeWarning, "FailedReconcileConfigMapData", fmt.Sprintf("Failed to reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
 				return ctrl.Result{}, err
 			}
-			r.Recorder.Event(&echoServer, v1.EventTypeNormal, ReconcileConfigMapData, fmt.Sprintf("Reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
+			r.Recorder.Event(&echoServer, v1.EventTypeWarning, ReconcileConfigMapData, fmt.Sprintf("Reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
 		}
 	}
 
-	hash, _ := hashstructure.Hash(configMap, hashstructure.FormatV2, nil)
+	// only hash the configMap.Data map to avoid unnecessary reconciliation during creation
+	hash, err := hashstructure.Hash(configMap.Data, hashstructure.FormatV2, nil)
+	if err != nil {
+		log.V(1).Error(err, "Failed to hash configMap.Data", "configmap", echoServer.Name)
+		r.Recorder.Event(&echoServer, v1.EventTypeNormal, Failed, fmt.Sprintf("Error: Failed to hash configMap data %s/%s", configMap.Namespace, configMap.Name))
+		return ctrl.Result{}, err
+	}
 
 	constructDeploy := func(echoServer *serversv1alpha1.EchoServer) (*appsv1.Deployment, error) {
 		deploy := &appsv1.Deployment{
