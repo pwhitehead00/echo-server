@@ -97,6 +97,8 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// not working yet
 	isMarkedToBeDeleted := echoServer.DeletionTimestamp != nil
 	if isMarkedToBeDeleted {
+		echoServer.Status.State = "Deleting"
+		r.Status().Update(ctx, &echoServer)
 		log.V(1).Info("Deleting EchoServer", "name", echoServer.Name, "namespace", echoServer.Namespace)
 	}
 
@@ -109,19 +111,27 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundConfigMap := &v1.ConfigMap{}
 	err = r.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 	if err != nil && errors.IsNotFound(err) {
+		echoServer.Status.State = "Creating ConfigMap"
+		r.Status().Update(ctx, &echoServer)
 		log.V(1).Info("Creating ConfigMap", "configmap", configMap.Name)
 		err = r.Create(ctx, configMap)
 		if err != nil {
+			echoServer.Status.State = "Failed"
+			r.Status().Update(ctx, &echoServer)
 			return ctrl.Result{}, err
 		}
 		r.Recorder.Event(&echoServer, v1.EventTypeNormal, "Created", fmt.Sprintf("Created configMap %s/%s", configMap.Namespace, configMap.Name))
 	} else if err == nil {
 		// reconcile configMap.Data
 		if !reflect.DeepEqual(foundConfigMap.Data, configMap.Data) {
+			echoServer.Status.State = "Updating ConfigMap"
+			r.Status().Update(ctx, &echoServer)
 			log.V(1).Info("configMap out of sync", "found:", foundConfigMap.Data, "expected:", configMap.Data)
 			foundConfigMap.Data = configMap.Data
 			err := r.Update(ctx, foundConfigMap)
 			if err != nil {
+				echoServer.Status.State = "Failed"
+				r.Status().Update(ctx, &echoServer)
 				log.V(1).Error(err, "Failed updating ConfigMap", "configmap", echoServer.Name)
 				r.Recorder.Event(&echoServer, v1.EventTypeWarning, "FailedReconcileConfigMapData", fmt.Sprintf("Failed to reconciled configMap Data %s/%s", configMap.Namespace, configMap.Name))
 				return ctrl.Result{}, err
@@ -148,18 +158,26 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundDeployment := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeployment)
 	if err != nil && errors.IsNotFound(err) {
+		echoServer.Status.State = "Creating Deployment"
+		r.Status().Update(ctx, &echoServer)
 		log.V(1).Info("Creating Deployment", "deployment", deploy.Name)
 		err = r.Create(ctx, deploy)
 		if err != nil {
+			echoServer.Status.State = "Failed"
+			r.Status().Update(ctx, &echoServer)
 			log.V(1).Info("Failed to create Deployment", "error", err)
 		}
 	} else if err == nil {
 		// reconcile deployment replicas
 		if *foundDeployment.Spec.Replicas != *echoServer.Spec.Replicas {
+			echoServer.Status.State = "Updating Deployment"
+			r.Status().Update(ctx, &echoServer)
 			log.V(1).Info("Replicas out of sync", "found:", foundDeployment.Spec.Replicas, "expected:", echoServer.Spec.Replicas)
 			foundDeployment.Spec.Replicas = echoServer.Spec.Replicas
 			err := r.Update(ctx, foundDeployment)
 			if err != nil {
+				echoServer.Status.State = "Failed"
+				r.Status().Update(ctx, &echoServer)
 				log.V(1).Error(err, "Failed to update deployment", "deployment", echoServer.Name)
 				return ctrl.Result{}, err
 			}
@@ -167,10 +185,14 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 		// reconcile deployment labels.  this will force pods to roll if the configmap changes
 		if !reflect.DeepEqual(foundDeployment.Spec.Template.ObjectMeta.Labels, deploy.Spec.Template.ObjectMeta.Labels) {
+			echoServer.Status.State = "Updating Deployment"
+			r.Status().Update(ctx, &echoServer)
 			log.V(1).Info("Pod template out of sync", "found:", foundDeployment.Spec.Template.ObjectMeta.Labels, "expected:", deploy.Spec.Template.ObjectMeta.Labels)
 			foundDeployment.Spec.Template.ObjectMeta.Labels = deploy.Spec.Template.ObjectMeta.Labels
 			err := r.Update(ctx, foundDeployment)
 			if err != nil {
+				echoServer.Status.State = "Failed"
+				r.Status().Update(ctx, &echoServer)
 				log.V(1).Error(err, "Failed to reconcile labels", "deployment", echoServer.Name)
 				return ctrl.Result{}, err
 			}
@@ -186,18 +208,26 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundService := &v1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && errors.IsNotFound(err) {
+		echoServer.Status.State = "Creating Service"
+		r.Status().Update(ctx, &echoServer)
 		log.V(1).Info("Creating Service", "service", service.Name)
 		err = r.Create(ctx, service)
 		if err != nil {
+			echoServer.Status.State = "Failed"
+			r.Status().Update(ctx, &echoServer)
 			return ctrl.Result{}, err
 		}
 	} else if err == nil {
 		// reconcile service ports
 		if !reflect.DeepEqual(foundService.Spec.Ports, service.Spec.Ports) {
+			echoServer.Status.State = "Updating Service"
+			r.Status().Update(ctx, &echoServer)
 			log.V(1).Info("Service ports out of sync", "found:", foundService.Spec.Ports, "expected:", service.Spec.Ports)
 			foundService.Spec.Ports[0] = service.Spec.Ports[0]
 			err := r.Update(ctx, foundService)
 			if err != nil {
+				echoServer.Status.State = "Failed"
+				r.Status().Update(ctx, &echoServer)
 				log.V(1).Error(err, "Failed to reconcie service ports", "name", echoServer.Name, "namespace", echoServer.Namespace)
 				return ctrl.Result{}, err
 			}
@@ -205,6 +235,8 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// return ctrl.Result{}, nil
+	echoServer.Status.State = "Up To Date"
+	r.Status().Update(ctx, &echoServer)
 	return scheduledResult, nil
 }
 
