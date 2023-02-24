@@ -77,6 +77,9 @@ const (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.1/pkg/reconcile
 func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
 	scheduledResult := ctrl.Result{RequeueAfter: 30 * time.Second}
 
 	log := log.FromContext(ctx)
@@ -111,16 +114,9 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundConfigMap := &v1.ConfigMap{}
 	err = r.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 	if err != nil && errors.IsNotFound(err) {
-		echoServer.Status.State = "Creating ConfigMap"
-		r.Status().Update(ctx, &echoServer)
-		log.V(1).Info("Creating ConfigMap", "configmap", configMap.Name)
-		err = r.Create(ctx, configMap)
-		if err != nil {
-			echoServer.Status.State = "Failed"
-			r.Status().Update(ctx, &echoServer)
+		if err := r.creater(ctx, echoServer, configMap, log); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.Recorder.Event(&echoServer, v1.EventTypeNormal, "Created", fmt.Sprintf("Created configMap %s/%s", configMap.Namespace, configMap.Name))
 	} else if err == nil {
 		// reconcile configMap.Data
 		if !reflect.DeepEqual(foundConfigMap.Data, configMap.Data) {
@@ -158,15 +154,11 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundDeployment := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeployment)
 	if err != nil && errors.IsNotFound(err) {
-		echoServer.Status.State = "Creating Deployment"
-		r.Status().Update(ctx, &echoServer)
 		log.V(1).Info("Creating Deployment", "deployment", deploy.Name)
-		err = r.Create(ctx, deploy)
-		if err != nil {
-			echoServer.Status.State = "Failed"
-			r.Status().Update(ctx, &echoServer)
-			log.V(1).Info("Failed to create Deployment", "error", err)
+		if err := r.creater(ctx, echoServer, deploy, log); err != nil {
+			return ctrl.Result{}, err
 		}
+		r.Recorder.Event(&echoServer, v1.EventTypeNormal, Created, fmt.Sprintf("Created deployment %v", deploy.Name))
 	} else if err == nil {
 		// reconcile deployment replicas
 		if *foundDeployment.Spec.Replicas != *echoServer.Spec.Replicas {
@@ -208,15 +200,20 @@ func (r *EchoServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	foundService := &v1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && errors.IsNotFound(err) {
-		echoServer.Status.State = "Creating Service"
-		r.Status().Update(ctx, &echoServer)
-		log.V(1).Info("Creating Service", "service", service.Name)
-		err = r.Create(ctx, service)
-		if err != nil {
-			echoServer.Status.State = "Failed"
-			r.Status().Update(ctx, &echoServer)
+		log.V(1).Info("Creating service", "service", service.Name)
+		if err := r.creater(ctx, echoServer, service, log); err != nil {
 			return ctrl.Result{}, err
 		}
+		r.Recorder.Event(&echoServer, v1.EventTypeNormal, Created, fmt.Sprintf("Created service %v", service.Name))
+		// echoServer.Status.State = "Creating Service"
+		// r.Status().Update(ctx, &echoServer)
+		// log.V(1).Info("Creating Service", "service", service.Name)
+		// err = r.Create(ctx, service)
+		// if err != nil {
+		// 	echoServer.Status.State = "Failed"
+		// 	r.Status().Update(ctx, &echoServer)
+		// 	return ctrl.Result{}, err
+		// }
 	} else if err == nil {
 		// reconcile service ports
 		if !reflect.DeepEqual(foundService.Spec.Ports, service.Spec.Ports) {
